@@ -1,31 +1,17 @@
-r"""Executable for evaluating a trained Resnet model for classifying Cifar10
-images.
-  
-You need to specify two required flags: `path` -- the path to the directory 
-containing Cifar10 binary files, and `ckpt_path` -- the path to the directory
-to load trained variables from. You can leave other flags as default or make 
-changes.
-
-Example:
-  python run_evaluator.py \
-    --path=/PATH/TO/CIFAR10 \
-    --ckpt_path=/PATH/TO/CKPT \
-    --num_layers=110
-"""
 import tensorflow as tf
 
-import resnet_model
-from utils import resnet_utils
-from utils import model_utils
-from dataset import EvaluatorCifar10Dataset
+from dataset import Cifar10DatasetBuilder
+from dataset import read_data
+from model import ResNetCifar10
+from model_runners import ResNetCifar10Evaluator
+from absl import flags
+from absl import app
 
 
-flags = tf.app.flags
-
-flags.DEFINE_string('path', '', 'The path to the directory containing Cifar10'
-                    ' binary files.')
-flags.DEFINE_string('ckpt_path', '', 'The path to the checkpoint file to load '
-                    'variables from.')
+flags.DEFINE_string('data_path', None, 'The path to the directory containing '
+                    'Cifar10  binary files.')
+flags.DEFINE_string('ckpt_path', None, 'The path to the'
+                    ' checkpoint file from which the model will be restored.')
 flags.DEFINE_integer('num_layers', 20, 'Number of weighted layers. Valid '
                      'values: 20, 32, 44, 56, 110')
 flags.DEFINE_boolean('shortcut_connection', True, 'Whether to add shortcut '
@@ -35,29 +21,29 @@ FLAGS = flags.FLAGS
 
 
 def main(_):
-  assert FLAGS.path, '`path` is missing.'
-  assert FLAGS.ckpt_path, '`ckpt_path` is missing.'
-  conv_hyperparams_fn = resnet_utils.build_arg_scope_fn()
+  builder = Cifar10DatasetBuilder()
 
-  model_evaluator = resnet_model.ResnetModelEvaluator(conv_hyperparams_fn, 
-                                                      FLAGS.num_layers)
+  labels, images = read_data(FLAGS.data_path, training=False) 
+  dataset = builder.build_dataset(labels, images, batch_size=10000, training=False)
 
-  dataset = EvaluatorCifar10Dataset(batch_size=10000)
+  model = ResNetCifar10(FLAGS.num_layers,
+                        shortcut_connection=FLAGS.shortcut_connection)
 
-  total_loss, accuracy = model_evaluator.evaluate(FLAGS.path, dataset)
 
-  restore_saver = model_utils.create_restore_saver()
+  ckpt = tf.train.Checkpoint(model=model)
 
-  sess = tf.Session()
+  evaluator = ResNetCifar10Evaluator(model)
 
-  restore_saver.restore(sess, FLAGS.ckpt_path)
-
-  loss, acc = sess.run([total_loss, accuracy])
-  print('Evaluation loss: %g' % loss)
-  print('Evaluation accuracy: %g' % acc)
-
-  sess.close()
+  latest_ckpt = tf.train.latest_checkpoint(FLAGS.ckpt_path)
+  if latest_ckpt:
+    print('loading checkpoint %s ' % latest_ckpt)
+    ckpt.restore(latest_ckpt).expect_partial()
+    loss, acc = evaluator.evaluate(dataset, 10000)
+    print('Eval loss: %s, eval accuracy: %s' % (loss, acc))
 
 if __name__ == '__main__':
-  tf.app.run()
+  flags.mark_flag_as_required('data_path')
+  flags.mark_flag_as_required('ckpt_path')
+
+  app.run(main)
 

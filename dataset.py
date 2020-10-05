@@ -1,13 +1,7 @@
-import os
-from abc import ABCMeta
-from abc import abstractproperty 
-
-import numpy as np
 import tensorflow as tf
+import numpy as np
+import os
 
-BYTES_PER_RECORD = 3073
-HEIGHT, WIDTH, CHANNELS = 32, 32, 3
-EVAL_BATCH_SIZE = 10000
 TRAIN_FILES = ('data_batch_1.bin',
                'data_batch_2.bin',
                'data_batch_3.bin',
@@ -16,112 +10,19 @@ TRAIN_FILES = ('data_batch_1.bin',
 TEST_FILES = 'test_batch.bin'
 
 
-class Cifar10Dataset(object):
-  """An abstract base class to be subclassed by Trainer and Evaluator. All
-  methods have been implemented in this base class, except the `mode` property.
+class Cifar10DatasetBuilder(object):
+  """Builds a tf.data.Dataset instance that batch the (optionally 
+  data-augmentated) images. 
   """
-
-  __metaclass__ = ABCMeta
-
-  @abstractproperty
-  def mode(self):
-    """Returns a string scalar indicating the mode of dataset (train or eval).
-    """
-    pass
-
-  def get_tensor_dict(self, path):
-    """Generates a tensor dict containing labels and images.
-
-    Args:
-      path: a string scalar, the path to the directory containing cifar10
-        binary files.
-    
-    Returns:
-      tensor_dict: a dict mapping from tensor names to tensors.
-        {'labels': int tensor with shape [batch],
-         'images': float tensor with shape [batch, height, width, channels]}
-    """
-    per_pixel_mean = self._get_per_pixel_mean(path)
-    if self.mode == tf.contrib.learn.ModeKeys.TRAIN:
-      filename_list = [os.path.join(path, fn) for fn in TRAIN_FILES]
-    else:
-      filename_list = [os.path.join(path, TEST_FILES)]
-    dataset = tf.data.FixedLengthRecordDataset(filename_list, BYTES_PER_RECORD)
-    dataset = dataset.repeat(None)
-    if self.mode == tf.contrib.learn.ModeKeys.TRAIN:
-      dataset = dataset.shuffle(buffer_size=self._buffer_size,
-                                seed=self._random_seed)
-
-    def transform_fn(record):
-      """Transforms a record (string scalar containing a byte sequence) into a 
-      tuple of label (int scalar) and image (float tensor with shape 
-      [height, width, channels]).
-      """
-      decoded = tf.decode_raw(record, tf.uint8)
-      label, image = decoded[0], decoded[1:]
-      label = tf.to_int64(label)
-      image = tf.to_float(image) - per_pixel_mean
-      image = tf.transpose(
-          tf.reshape(image, [CHANNELS, HEIGHT, WIDTH]), [1, 2, 0])
-      return label, image
- 
-    dataset = dataset.map(transform_fn)
-
-    def data_augmentation_fn(*label_image_tuple):
-      """Performs data augmentation on image.
-      """
-      label, image = label_image_tuple
-      image = tf.pad(image, [[self._pad_size, self._pad_size],
-                             [self._pad_size, self._pad_size], [0, 0]])
-      image = tf.image.random_flip_left_right(image, seed=self._random_seed)
-      image = tf.random_crop(image, [self._crop_size, self._crop_size, 3])
-      return label, image
-
-    if self.mode == tf.contrib.learn.ModeKeys.TRAIN:
-      dataset = dataset.map(data_augmentation_fn)
-    dataset = dataset.batch(self._batch_size)
-    iterator = dataset.make_one_shot_iterator()
-    labels, images = iterator.get_next()
-    return {'labels': labels, 'images': images}
-
-  def _get_per_pixel_mean(self, path):
-    """Computes the per pixel mean (for each of the 3072) over all 50000
-    training images.
-    """
-    filename_list = [os.path.join(path, fn) for fn in TRAIN_FILES]
-    images = []
-    for fn in filename_list:
-      images.extend(self._read_file(fn))
-    per_pixel_mean = np.array(images).astype(np.float32).mean(axis=0)
-    return per_pixel_mean
-
-  def _read_file(self, filename):
-    """Reads a single cifar10 binary file and returns the list of raw byte
-    sequences (rank-1 arrays with shape [32 * 32 * 3]).
-    """
-    content = np.fromfile(filename, np.uint8)
-    images = []
-    for i in np.arange(0, len(content), BYTES_PER_RECORD):
-      images.append(content[i + 1 : i + BYTES_PER_RECORD])
-    return images
-
-
-class TrainerCifar10Dataset(Cifar10Dataset):
-  """Cifar10 dataset for trainer.
-
-  The dataset is mean-subtracted, shuffled, augmented, and batched.
-  """
-  def __init__(self,
-               batch_size=128,
-               pad_size=4,
-               crop_size=32,
-               buffer_size=10000,
+  def __init__(self, 
+               pad_size=4, 
+               crop_size=32, 
+               buffer_size=50000,
                random_seed=0):
-    """Constructor.
+    """Constrcutor.
 
     Args:
-      batch_size: int scalar, batch size.
-      pad_size: int scalar, the num of pixels padded to both directions (low and 
+      pad_size: int scalar, the num of pixels padded to both directions (low and
         high) in the height and width dimension.
       crop_size: int scalar, the num of pixels to crop from the padded image in 
         the height and width dimension.
@@ -129,31 +30,88 @@ class TrainerCifar10Dataset(Cifar10Dataset):
         enough to get a sufficiently randomized sequence.
       random_seed: int scalar, random seed.
     """
-    self._batch_size = batch_size
     self._pad_size = pad_size
     self._crop_size = crop_size
     self._buffer_size = buffer_size
     self._random_seed = random_seed
 
-  @property
-  def mode(self):
-    return tf.contrib.learn.ModeKeys.TRAIN
-
-
-class EvaluatorCifar10Dataset(Cifar10Dataset):
-  """Cifar10 dataset for evaluator.
-
-  The dataset is just mean-subtracted and batched. No shuffling or augmentation.
-  """
-  def __init__(self, batch_size=1):
-    """Constructor.
+  def build_dataset(self, labels, images, batch_size, training=True):
+    """Builds the CIFAR10 dataset.
 
     Args:
+      labels: numpy array of shape [num_images], holding the class labels/
+      images: numpy array of shape [num_images, 32, 32, 3], holding the images.
       batch_size: int scalar, batch size.
+      training: bool scalar, whether to build dataset for training (True) or 
+        evaluation (False).
+
+    Returns:
+      dataset: a tf.data.Dataset instance.
     """
-    self._batch_size = batch_size
+    dataset = tf.data.Dataset.from_tensor_slices((labels, images))
 
-  @property
-  def mode(self):
-    return tf.contrib.learn.ModeKeys.EVAL
+    if training:
+      dataset = dataset.repeat().shuffle(
+          buffer_size=self._buffer_size, seed=self._random_seed) 
 
+    def data_augmentation_fn(*label_image_tuple):
+      label, image = label_image_tuple
+      image = tf.pad(image, [[self._pad_size, self._pad_size], 
+                             [self._pad_size, self._pad_size], [0, 0]])
+      image = tf.image.random_flip_left_right(image, seed=self._random_seed)
+      image = tf.image.random_crop(image, [self._crop_size, self._crop_size, 3])
+      return label, image
+
+    if training:
+      dataset = dataset.map(data_augmentation_fn)
+
+    dataset = dataset.batch(batch_size)
+
+    return dataset
+
+def parse_binary(filename):
+  """Parse CIFAR10 data in binary format.
+
+  Args:
+    filename: string scalar, the filename of a CIFAR10 data batch file in binary
+      format.
+
+  Returns:
+    labels: numpy array of shape [num_images], holding the class labels/
+    images: numpy array of shape [num_images, 32, 32, 3], holding the images.
+  """
+  content = np.fromfile(filename, 'uint8')
+  labels, images = np.split(
+      content.reshape(10000, -1), axis=1, indices_or_sections=[1])
+  labels = np.squeeze(labels)
+  images = images.reshape(10000, 3, 32, 32).transpose(0, 2, 3, 1)
+  return labels, images
+
+def read_data(data_path, training=True):
+  """Reads CIFAR10 data and performs mean subtraction.
+
+  Args:
+    data_path: string scalar, the path to the directory holding CIFAR10 data 
+      batch files.
+    training: bool scalar, whether to read the training split (True) or 
+      evaluation split (False).
+
+  Returns:
+    labels: numpy array of shape [num_images], holding the class labels/
+    images: numpy array of shape [num_images, 32, 32, 3], holding the images.
+  """
+  filename_list = [os.path.join(data_path, fn) for fn in TRAIN_FILES]
+  labels, images = tuple(zip(*[parse_binary(filename_list[i]) for i in range(5)]))
+  labels = np.concatenate(labels, axis=0)
+  images = np.concatenate(images, axis=0)
+
+  per_pixel_mean = images.mean(axis=0)
+  
+  if not training:
+    labels, images = parse_binary(os.path.join(data_path, TEST_FILES)) 
+  images = images - per_pixel_mean
+
+  labels = labels.astype('int64')
+  images = images.astype('float32')
+
+  return labels, images
