@@ -1,6 +1,6 @@
 # ResNet: Classifying CIFAR-10 images *with Horovod*
 
-**Note**: this project is forked from [tf-resnet-cifar10 (github.com/chao-ji/tf-resnet-cifar10)](www.github.com/chao-ji/tf-resnet-cifar10)
+**Note**: this project is forked from [github.com/chao-ji/tf-resnet-cifar10](www.github.com/chao-ji/tf-resnet-cifar10)
 
 * A lightweight TensorFlow implementation of ResNet model for classifying CIFAR-10 images. 
 
