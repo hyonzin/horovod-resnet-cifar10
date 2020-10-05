@@ -32,6 +32,8 @@ flags.DEFINE_float('batch_norm_momentum', 0.99, 'Moving average decay.')
 flags.DEFINE_boolean('shortcut_connection', True, 'Whether to add shortcut '
                      'connection. Defaults to True. False for Plain network.')
 
+flags.DEFINE_string('compression', 'NONE', 'Gradient compression method')
+
 FLAGS = flags.FLAGS
 
 
