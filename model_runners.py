@@ -44,7 +44,7 @@ class ResNetCifar10Trainer(object):
         tf.TensorSpec(shape=(batch_size, 32, 32, 3), dtype=tf.float32)]
 
     @tf.function(input_signature=train_step_signature)
-    def train_step(labels, images):
+    def train_step(labels, images, first_batch):
       with tf.GradientTape() as tape:
         logits = self._model(images, training=True)
         cross_entropy_loss = tf.reduce_mean(
@@ -52,6 +52,9 @@ class ResNetCifar10Trainer(object):
                 labels=labels, logits=logits))
         regularization_losses = self._model.losses
         total_loss = tf.add_n(regularization_losses + [cross_entropy_loss])
+
+      # Horovod: add Horovod Distributed GradientTape.
+      tape = hvd.DistributedGradientTape(tape)
 
       accuracy = tf.reduce_mean(tf.cast(tf.equal(
           labels, tf.argmax(logits, 1)), 'float32'))
@@ -62,6 +65,16 @@ class ResNetCifar10Trainer(object):
       step = optimizer.iterations
       lr = optimizer.learning_rate(step)
       
+      # Horovod: broadcast initial variable states from rank 0 to all other processes.
+      # This is necessary to ensure consistent initialization of all workers when
+      # training is started with random weights or restored from a checkpoint.
+      #
+      # Note: broadcast should be done after the first gradient step to ensure optimizer
+      # initialization.
+      if first_batch:
+        hvd.broadcast_variables(mnist_model.variables, root_rank=0)
+        hvd.broadcast_variables(opt.variables(), root_rank=0)
+
       return total_loss, accuracy, step - 1, lr
 
     summary_writer = tf.summary.create_file_writer(logdir)
@@ -73,14 +86,18 @@ class ResNetCifar10Trainer(object):
     else:
       print('Training from scratch...')
 
+    first_batch = true
     for labels, images in dataset:
-      total_loss, accuracy, step, lr = train_step(labels, images)
+      total_loss, accuracy, step, lr = train_step(labels, images, first_batch)
+      first_batch = false
 
       with summary_writer.as_default():
         tf.summary.scalar('train_loss', total_loss, step=step)
         tf.summary.scalar('train_accuracy', accuracy, step=step)
 
-      if step % log_per_iterations == 0:
+      # Horovod: save checkpoints only on worker 0 to prevent other workers from
+      # corrupting it.
+      if hvd.rank() == 0 and step % log_per_iterations == 0:
         print('global_step: %d, loss: %f, accuracy: %f, lr: %f' % (
             step, total_loss.numpy(), accuracy.numpy(), lr.numpy()))
 

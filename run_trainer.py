@@ -1,4 +1,5 @@
 import tensorflow as tf
+import horovod.tensorflow as hvd
 
 from dataset import Cifar10DatasetBuilder 
 from dataset import read_data
@@ -35,6 +36,20 @@ FLAGS = flags.FLAGS
 
 
 def main(_):
+  # Initialize Horovod
+  hvd.init()
+
+  # Pin GPU to be used to process local rank (one GPU per process)
+  gpus = tf.config.experimental.list_physical_devices('GPU')
+  for gpu in gpus:
+    tf.config.experimental.set_memory_growth(gpu, True)
+  if gpus:
+    tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], 'GPU')
+
+  # Scale the learning rate by the number of workers
+  learning_rate = FLAGS.init_lr * hvd.size()
+
+  
   builder = Cifar10DatasetBuilder(buffer_size=FLAGS.shuffle_buffer_size)
   labels, images = read_data(FLAGS.data_path, training=True)
   dataset = builder.build_dataset(
@@ -44,7 +59,15 @@ def main(_):
                         shortcut_connection=FLAGS.shortcut_connection, 
                         weight_decay=FLAGS.weight_decay, 
                         batch_norm_momentum=FLAGS.batch_norm_momentum)
-  optimizer = build_optimizer(init_lr=FLAGS.init_lr, momentum=FLAGS.momentum)
+  optimizer = build_optimizer(init_lr=learning_rate, momentum=FLAGS.momentum)
+
+  # Wrap the optimizer in hvd.DistributedOptimizer
+  optimizer = hvd.DistributedOptimizer(optimizer)
+
+  # Add hook to broadcast variables from rank 0 to all other processes during
+  # initialization.
+  hooks = [hvd.BroadcastGlobalVariablesHook(0)]
+
   ckpt = tf.train.Checkpoint(model=model, optimizer=optimizer)
 
   trainer = ResNetCifar10Trainer(model)
