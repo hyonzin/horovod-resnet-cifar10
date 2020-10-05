@@ -64,10 +64,6 @@ def main(_):
   # Wrap the optimizer in hvd.DistributedOptimizer
   optimizer = hvd.DistributedOptimizer(optimizer)
 
-  # Add hook to broadcast variables from rank 0 to all other processes during
-  # initialization.
-  hooks = [hvd.BroadcastGlobalVariablesHook(0)]
-
   ckpt = tf.train.Checkpoint(model=model, optimizer=optimizer)
 
   trainer = ResNetCifar10Trainer(model)

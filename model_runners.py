@@ -1,4 +1,5 @@
 import tensorflow as tf
+import horovod.tensorflow as hvd
 import os
 
 PREFIX = 'resnet-cifar10'
@@ -39,11 +40,7 @@ class ResNetCifar10Trainer(object):
       logdir: string scalar, the directory that the tensorboard log data will
         be written to.
     """
-    train_step_signature = [
-        tf.TensorSpec(shape=(batch_size,), dtype=tf.int64),
-        tf.TensorSpec(shape=(batch_size, 32, 32, 3), dtype=tf.float32)]
-
-    @tf.function(input_signature=train_step_signature)
+    @tf.function
     def train_step(labels, images, first_batch):
       with tf.GradientTape() as tape:
         logits = self._model(images, training=True)
@@ -60,6 +57,9 @@ class ResNetCifar10Trainer(object):
           labels, tf.argmax(logits, 1)), 'float32'))
       gradients = tape.gradient(total_loss, self._model.trainable_variables)
 
+      #import pdb; pdb.set_trace();
+      optimizer._aggregate_gradients(
+          zip(gradients, self._model.trainable_variables))
       optimizer.apply_gradients(
           zip(gradients, self._model.trainable_variables))
       step = optimizer.iterations
@@ -72,8 +72,8 @@ class ResNetCifar10Trainer(object):
       # Note: broadcast should be done after the first gradient step to ensure optimizer
       # initialization.
       if first_batch:
-        hvd.broadcast_variables(mnist_model.variables, root_rank=0)
-        hvd.broadcast_variables(opt.variables(), root_rank=0)
+        hvd.broadcast_variables(self._model.variables, root_rank=0)
+        hvd.broadcast_variables(optimizer.variables(), root_rank=0)
 
       return total_loss, accuracy, step - 1, lr
 
@@ -86,10 +86,10 @@ class ResNetCifar10Trainer(object):
     else:
       print('Training from scratch...')
 
-    first_batch = true
+    first_batch = True
     for labels, images in dataset:
       total_loss, accuracy, step, lr = train_step(labels, images, first_batch)
-      first_batch = false
+      first_batch = False
 
       with summary_writer.as_default():
         tf.summary.scalar('train_loss', total_loss, step=step)
