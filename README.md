@@ -18,26 +18,29 @@ git clone git@github.com:hyonzin/horovod-resnet-cifar10.git
 wget https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz
 tar -xvzf cifar-10-binary.tar.gz
 ```
-##### Train the ResNet Classifier
-To train the ResNet model using default settings, simply run
+
+##### Training
+To **train** a model, run
 ```
 python run_trainer.py \
-  --data_path=cifar-10-batches-bin \
-  --num_layers=110
+  --data_path=/path/to/cifar10/binary/files \
 ```
-To change the number of layers in the ResNet (for example, to 110), specify `--num_layers=110`. To degenerate the ResNet model to a *Plain network*, specify `--shortcut_connections=False`. To see a full list of arguments, run
+Note that you can terminate training prematurely, and pick up where you left off by setting `--ckpt_path=` to the path to the directory containing all checkpoint files generated so far. The parameters will be restored from the most recent checkpoint. Also, the training metrics (loss and accuracy) will be written to `./log`. Run `tensorboard --logdir=log` to view tensorboard.
+
+##### Evaluation
+To **evaluate** a model, run
+```
+python run_evaluator.py \
+  --data_path=/path/to/cifar10/binary/files \
+  --ckpt_path=/path/to/directory/ckpt/files/will/be/loaded/from
+```
+
+To see full list of arguments, run
+
 ```
 python run_trainer.py --help
+python run_evaluator.py --help
 ```
-##### Evaluate a Trained ResNet Classifier
-To evaluate the trained model on the test set (10,000 images), run
-```
-  python run_evaluator.py \
-    --path=cifar-10-batches-bin \
-    --ckpt_path=/PATH/TO/CKPT \
-    --num_layers=110
-```
-Note that you need to specify the path to the checkpoint file containing trained weights via `--ckpt_path`.
 
 ### References:
   1. <a name="myfootnote1">ResNet V1</a>, Deep Residual Learning for Image Recognition, He *et al.*
