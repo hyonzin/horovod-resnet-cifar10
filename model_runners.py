@@ -1,6 +1,7 @@
 import tensorflow as tf
 import horovod.tensorflow as hvd
 import os
+import time
 
 PREFIX = 'resnet-cifar10'
 
@@ -23,6 +24,7 @@ class ResNetCifar10Trainer(object):
             num_iterations, 
             log_per_iterations, 
             ckpt_path,
+            compression=hvd.Compression.none,
             logdir='log'):
     """Executes training.
 
@@ -51,13 +53,12 @@ class ResNetCifar10Trainer(object):
         total_loss = tf.add_n(regularization_losses + [cross_entropy_loss])
 
       # Horovod: add Horovod Distributed GradientTape.
-      tape = hvd.DistributedGradientTape(tape)
+      tape = hvd.DistributedGradientTape(tape, compression=compression)
 
       accuracy = tf.reduce_mean(tf.cast(tf.equal(
           labels, tf.argmax(logits, 1)), 'float32'))
       gradients = tape.gradient(total_loss, self._model.trainable_variables)
 
-      #import pdb; pdb.set_trace();
       optimizer._aggregate_gradients(
           zip(gradients, self._model.trainable_variables))
       optimizer.apply_gradients(
@@ -79,14 +80,16 @@ class ResNetCifar10Trainer(object):
 
     summary_writer = tf.summary.create_file_writer(logdir)
 
-    latest_ckpt = tf.train.latest_checkpoint(ckpt_path)
-    if latest_ckpt:
-      print('Restoring from checkpoint: %s ...' % latest_ckpt)
-      ckpt.restore(latest_ckpt)
-    else:
-      print('Training from scratch...')
+    if hvd.rank() == 0:
+      latest_ckpt = tf.train.latest_checkpoint(ckpt_path)
+      if latest_ckpt:
+        print('Restoring from checkpoint: %s ...' % latest_ckpt)
+        ckpt.restore(latest_ckpt)
+      else:
+        print('Training from scratch...')
 
     first_batch = True
+    batch_time = time.time()
     for labels, images in dataset:
       total_loss, accuracy, step, lr = train_step(labels, images, first_batch)
       first_batch = False
@@ -98,8 +101,9 @@ class ResNetCifar10Trainer(object):
       # Horovod: save checkpoints only on worker 0 to prevent other workers from
       # corrupting it.
       if hvd.rank() == 0 and step % log_per_iterations == 0:
-        print('global_step: %d, loss: %f, accuracy: %f, lr: %f' % (
-            step, total_loss.numpy(), accuracy.numpy(), lr.numpy()))
+        print('global_step: %d, loss: %f, accuracy: %f, lr: %f, img/sec: %f' % (
+            step, total_loss.numpy(), accuracy.numpy(), lr.numpy(), (batch_size*log_per_iterations)*hvd.size()/(time.time()-batch_time)))
+        batch_time = time.time()
 
         ckpt.save(os.path.join(ckpt_path, PREFIX))
 

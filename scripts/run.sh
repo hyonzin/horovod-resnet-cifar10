@@ -1,30 +1,19 @@
 #!/bin/bash
-cd "$(dirname "$0")"
-
-source configs.sh
+cd "$(dirname "$0")"/..
+source scripts/configs.sh
 ############################
-#run $NONE 1
-#run $CPU  3
-#run $GPU  15
-
-#for i in {15..1};do
+#for n in {15..1};do
 #    echo $i
-#    run $NONE $i
-#    run $CPU $i
-#    run $GPU $i
+#    run $NONE $n
+#    run $FP16 $n
+#    run $CPU $n
+#    run $GPU $n
+#    run $AllreduceAdacomp $n
 #done
 
-
-#for i in {2..10..2};do
-#    echo 
-#    echo $i
-#    run $NONE $i
-#    run $CPU $i
-#    run $GPU $i
-#done
-
-n=1
-#run $NONE $n
+n=4
+#run $FP16 $n
 #run $CPU $n
 run $GPU $n
+#run $AllreduceAdacomp $n
  

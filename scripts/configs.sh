@@ -1,17 +1,18 @@
 #!/bin/bash
+cd "$(dirname "$0")"/..
 
-NONE="fp16-allreduce"
+NONE="none"
+FP16="fp16"
 CPU="adacompCPU"
 GPU="adacompGPU"
+AllreduceAdacomp="allreduceAdacomp"
 
 NODES_1="node01:1 "
 NODES_2="node01:1,node02:1 "
 NODES_3="node01:1,node02:1,node03:1 "
 NODES_4="node01:1,node02:1,node03:1,node04:1 "
-#NODES_5="node01:1,node02:1,node03:1,node04:1,node05:1 "
-#NODES_6="node01:1,node02:1,node03:1,node04:1,node05:1,node06:1 "
-NODES_5="node01:1,node02:1,node03:1,node04:1,node06:1 "
-NODES_6="node01:1,node02:1,node03:1,node04:1,node06:1,node07:1 "
+NODES_5="node01:1,node02:1,node03:1,node04:1,node05:1 "
+NODES_6="node01:1,node02:1,node03:1,node04:1,node05:1,node06:1 "
 NODES_7="node01:1,node02:1,node03:1,node04:1,node06:1,node07:1,node08:1 "
 NODES_8="node01:1,node02:1,node03:1,node04:1,node06:1,node07:1,node08:1,node09:1 "
 
@@ -30,25 +31,26 @@ NODES=("" ${NODES_1} ${NODES_2} ${NODES_3} ${NODES_4} ${NODES_5} \
 
 run()
 {
-COM_OP=${1:-NONE}
+COM_OP=${1:-fp16}
 NUM_NODE=${2:-1}
 BATCH=${3:-128}
-LOG="log_${COM_OP}.txt"
+LOG="./log/log_${COM_OP}.txt"
 
 date | tee -a ${LOG}
 
 BIN="${HOME}/local/openmpi-4.0.4/bin/mpirun"
 
 OP="${OP} -np ${NUM_NODE} -H ${NODES[$NUM_NODE]} "
-OP="${OP} -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH "
-OP="${OP} -mca btl_openib_allow_ib true"
+#OP="${OP} -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH "
+#OP="${OP} -mca btl_openib_allow_ib true"
 #OP="${OP} -mca btl_openib_allow_ib false -mca btl_tcp_if_include eth0"
+OP="${OP} -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH --mca btl_openib_allow_ib false --mca btl_tcp_if_include eth0"
 
-APP=../run_trainer.py
+APP=run_trainer.py
 
 APP_OP="${APP_OP} --compression=${COM_OP} \
     --num_layers=56 \
-    --data_path=../files/cifar-10-batches-bin"
+    --data_path=files/cifar-10-batches-bin"
 
 CMD="${BIN} ${OP} python3 ${APP} ${APP_OP}"
 

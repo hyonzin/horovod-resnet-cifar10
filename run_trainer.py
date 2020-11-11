@@ -49,8 +49,22 @@ def main(_):
     tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], 'GPU')
 
   # Scale the learning rate by the number of workers
-  learning_rate = FLAGS.init_lr * hvd.size()
+  #learning_rate = FLAGS.init_lr * hvd.size()
+  learning_rate = FLAGS.init_lr
 
+  compression = hvd.Compression.none
+  if FLAGS.compression == "adacompGPU":
+      compression = hvd.Compression.adacompGPU
+  elif FLAGS.compression == "adacompGPU":
+      compression = hvd.Compression.adacompCPU
+  elif FLAGS.compression == "fp16":
+      compression = hvd.Compression.fp16
+  elif FLAGS.compression == "allreduceAdacomp":
+      compression = hvd.Compression.allreduceAdacomp
+
+  print("compression:", compression)
+  hvd.Compression.allreduceAdacomp.R=50
+  hvd.Compression.allreduceAdacomp.K=100
   
   builder = Cifar10DatasetBuilder(buffer_size=FLAGS.shuffle_buffer_size)
   labels, images = read_data(FLAGS.data_path, training=True)
@@ -75,7 +89,8 @@ def main(_):
                 FLAGS.batch_size, 
                 FLAGS.num_iterations, 
                 FLAGS.log_per_iterations, 
-                FLAGS.ckpt_path)
+                FLAGS.ckpt_path,
+                compression)
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('data_path')
