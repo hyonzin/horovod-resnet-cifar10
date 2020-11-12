@@ -63,8 +63,8 @@ def main(_):
       compression = hvd.Compression.allreduceAdacomp
 
   print("compression:", compression)
-  hvd.Compression.allreduceAdacomp.R=50
-  hvd.Compression.allreduceAdacomp.K=100
+  #hvd.Compression.allreduceAdacomp.R=20
+  #hvd.Compression.allreduceAdacomp.K=100
   
   builder = Cifar10DatasetBuilder(buffer_size=FLAGS.shuffle_buffer_size)
   labels, images = read_data(FLAGS.data_path, training=True)
