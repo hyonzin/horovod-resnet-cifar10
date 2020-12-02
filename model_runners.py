@@ -102,7 +102,7 @@ class ResNetCifar10Trainer(object):
       # corrupting it.
       if hvd.rank() == 0 and step % log_per_iterations == 0:
         print('global_step: %d, loss: %f, accuracy: %f, lr: %f, img/sec: %f' % (
-            step, total_loss.numpy(), accuracy.numpy(), lr.numpy(), (batch_size*log_per_iterations)*hvd.size()/(time.time()-batch_time)))
+            step, total_loss.numpy(), accuracy.numpy(), lr.numpy(), (batch_size * log_per_iterations) * hvd.size() / (time.time() - batch_time)))
         batch_time = time.time()
 
         ckpt.save(os.path.join(ckpt_path, PREFIX))

@@ -11,9 +11,13 @@ source scripts/configs.sh
 #    run $AllreduceAdacomp $n
 #done
 
+#rm -rf "/tmp/resnet"
+
 n=4
+
+k=0
 #run $FP16 $n
 #run $CPU $n
 #run $GPU $n
-run $AllreduceAdacomp $n
+run $AllreduceAdacomp $n $k
  

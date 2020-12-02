@@ -33,7 +33,7 @@ run()
 {
 COM_OP=${1:-fp16}
 NUM_NODE=${2:-1}
-BATCH=${3:-128}
+K=${3:-1}
 LOG="./log/log_${COM_OP}.txt"
 
 date | tee -a ${LOG}
@@ -44,11 +44,26 @@ OP="${OP} -np ${NUM_NODE} -H ${NODES[$NUM_NODE]} "
 #OP="${OP} -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH "
 #OP="${OP} -mca btl_openib_allow_ib true"
 #OP="${OP} -mca btl_openib_allow_ib false -mca btl_tcp_if_include eth0"
-OP="${OP} -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH --mca btl_openib_allow_ib false --mca btl_tcp_if_include eth0"
+
+#ethernet
+#OP="${OP} -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH --mca btl_openib_allow_ib false --mca btl_tcp_if_include eth0"
+#ib?
+#OP="${OP} -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH --mca btl_openib_allow_ib true --mca btl_tcp_if_include eth0"
+
+OP="${OP} -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH"
+
+# Ethernet
+#OP="$OP --mca btl_openib_allow_ib false  --mca btl_tcp_if_include eth0"
+
+# Infiniband
+OP="$OP --mca btl_openib_allow_ib true --mca btl_openib_if_include mlx4_0:1 --mca pml ^ucx"
+
+
 
 APP=run_trainer.py
 
 APP_OP="${APP_OP} --compression=${COM_OP} \
+    --k=${K} \
     --num_layers=56 \
     --data_path=files/cifar-10-batches-bin"
 
