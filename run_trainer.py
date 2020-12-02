@@ -34,7 +34,8 @@ flags.DEFINE_boolean('shortcut_connection', True, 'Whether to add shortcut '
 
 flags.DEFINE_string('compression', 'NONE', 'Gradient compression method')
 
-flags.DEFINE_float('k', 1.0, 'parameter for Allreduce-Adacomp')
+flags.DEFINE_float('K', 1.0, 'parameter for Allreduce-Adacomp')
+flags.DEFINE_float('R', 20.0, 'parameter for Allreduce-Adacomp')
 
 FLAGS = flags.FLAGS
 
@@ -62,8 +63,9 @@ def main(_):
   elif FLAGS.compression == "fp16":
       compression = hvd.Compression.fp16
   elif FLAGS.compression == "allreduceAdacomp":
-      hvd.Compression.allreduceAdacomp.K = FLAGS.k
       compression = hvd.Compression.allreduceAdacomp
+      hvd.Compression.allreduceAdacomp.K = FLAGS.K
+      hvd.Compression.allreduceAdacomp.R = FLAGS.R
 
   print("compression:", compression)
   #hvd.Compression.allreduceAdacomp.R=20

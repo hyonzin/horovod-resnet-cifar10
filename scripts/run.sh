@@ -15,9 +15,10 @@ source scripts/configs.sh
 
 n=4
 
-k=0
+K=1
+R=10
 #run $FP16 $n
 #run $CPU $n
 #run $GPU $n
-run $AllreduceAdacomp $n $k
+run $AllreduceAdacomp $n $K $R
  

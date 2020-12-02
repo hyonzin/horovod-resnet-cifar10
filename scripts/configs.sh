@@ -34,6 +34,7 @@ run()
 COM_OP=${1:-fp16}
 NUM_NODE=${2:-1}
 K=${3:-1}
+R=${4:-20}
 LOG="./log/log_${COM_OP}.txt"
 
 date | tee -a ${LOG}
@@ -63,7 +64,7 @@ OP="$OP --mca btl_openib_allow_ib true --mca btl_openib_if_include mlx4_0:1 --mc
 APP=run_trainer.py
 
 APP_OP="${APP_OP} --compression=${COM_OP} \
-    --k=${K} \
+    --K=${K} --R=${R}\
     --num_layers=56 \
     --data_path=files/cifar-10-batches-bin"
 
